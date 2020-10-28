@@ -1,10 +1,10 @@
-"""Parent class for every TaHoma devices."""
+"""Parent class for every TaHoma device."""
+import logging
 from typing import Any, Dict, Optional
-
-from pyhoma.models import Command, Device
 
 from homeassistant.const import ATTR_BATTERY_LEVEL
 from homeassistant.helpers.entity import Entity
+from pyhoma.models import Command, Device
 
 from .const import DOMAIN
 from .coordinator import TahomaDataUpdateCoordinator
@@ -13,6 +13,8 @@ ATTR_RSSI_LEVEL = "rssi_level"
 
 CORE_AVAILABILITY_STATE = "core:AvailabilityState"
 CORE_BATTERY_STATE = "core:BatteryState"
+CORE_MANUFACTURER_NAME_STATE = "core:ManufacturerNameState"
+CORE_MODEL_STATE = "core:ModelState"
 CORE_RSSI_LEVEL_STATE = "core:RSSILevelState"
 CORE_SENSOR_DEFECT_STATE = "core:SensorDefectState"
 CORE_STATUS_STATE = "core:StatusState"
@@ -23,6 +25,8 @@ STATE_BATTERY_NORMAL = "normal"
 STATE_BATTERY_LOW = "low"
 STATE_BATTERY_VERY_LOW = "verylow"
 STATE_DEAD = "dead"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class TahomaDevice(Entity):
@@ -106,11 +110,14 @@ class TahomaDevice(Entity):
     @property
     def device_info(self) -> Dict[str, Any]:
         """Return device registry information for this entity."""
+        manufacturer = self.select_state(CORE_MANUFACTURER_NAME_STATE) or "Somfy"
+        model = self.select_state(CORE_MODEL_STATE) or self.device.widget
+
         return {
             "identifiers": {(DOMAIN, self.unique_id)},
-            "manufacturer": "Somfy",
+            "manufacturer": manufacturer,
             "name": self.name,
-            "model": self.device.widget,
+            "model": model,
             "sw_version": self.device.controllable_name,
         }
 
@@ -152,9 +159,15 @@ class TahomaDevice(Entity):
 
     async def async_execute_command(self, command_name: str, *args: Any):
         """Execute device command in async context."""
-        exec_id = await self.coordinator.client.execute_command(
-            self.device.deviceurl, Command(command_name, list(args)), "Home Assistant"
-        )
+        try:
+            exec_id = await self.coordinator.client.execute_command(
+                self.device.deviceurl,
+                Command(command_name, list(args)),
+                "Home Assistant",
+            )
+        except Exception as exception:  # pylint: disable=broad-except
+            _LOGGER.error(exception)
+            return
 
         # ExecutionRegisteredEvent doesn't contain the deviceurl, thus we need to register it here
         self.coordinator.executions[exec_id] = {
