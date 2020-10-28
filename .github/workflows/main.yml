@@ -14,6 +14,6 @@ jobs:
       - uses: tgymnich/fork-sync@v1.2
         with:
           github_token: ${{ secrets.TAHOMA_TOKEN }}
-          owner: jesuslg123
+          owner: iMicknl
           base: master
           head: master
